@@ -8,6 +8,8 @@
 --------------------------------------------------------------------------------------------------------------------------------------------------
 
 -- Run this once!
+DROP TABLE myownschema.numbers;
+
 CREATE TABLE myownschema.numbers (
 	index INT
 );
@@ -41,7 +43,12 @@ col1 col2 col3
 */
 
 -- Answer
-
+SELECT * 
+FROM myownschema.numbers AS col1
+INNER JOIN myownschema.numbers AS col2 
+		ON col1.index + 1 = col2.index
+INNER JOIN myownschema.numbers AS col3
+		ON col2.index + 1 = col3.index;
 --------------------------------------------------------------------------------------------------------------------------------------------------
 
 -- Run these once!
@@ -62,11 +69,67 @@ FROM myownschema.stars;
 -- Q2: Form a triangle that has three rows, 3 stars at the top row and 1 star at the bottom row and rectangle with 3 rows and 2 columns using this table only.
 
 -- Rectangle Answer:
-
+(
+SELECT * 
+FROM myownschema.stars AS col1
+INNER JOIN myownschema.stars AS col2
+		ON col1.star = col2.star
+)
+UNION ALL
+(
+SELECT * 
+FROM myownschema.stars AS col1
+INNER JOIN myownschema.stars AS col2
+		ON col1.star = col2.star
+)
+UNION ALL
+(
+SELECT * 
+FROM myownschema.stars AS col1
+INNER JOIN myownschema.stars AS col2
+		ON col1.star = col2.star
+)
 
 -- Triangle Answer: 
+(
+SELECT * 
+FROM myownschema.stars AS col1
+INNER JOIN myownschema.stars AS col2
+		ON col1.star = col2.star
+INNER JOIN myownschema.stars AS col3
+		ON col2.star = col3.star
+)
+UNION ALL
+(
+SELECT *, '' 
+FROM myownschema.stars AS col1
+INNER JOIN myownschema.stars AS col2
+		ON col1.star = col2.star
+)
+UNION ALL
+(
+SELECT *,'','' 
+FROM myownschema.stars AS col1
+)
 
+-- EG
+DROP TABLE myownschema.shapes;
+CREATE TABLE myownschema.shapes(
+	shapes TEXT
+);
+INSERT INTO myownschema.shapes (shapes)
+VALUES
+	('Circle'),
+	('Square'),
+	('Triangle'),
+	('Rectangle'),
+	('Polygon');
+SELECT * FROM myownschema.shapes;
 
+SELECT *
+FROM myownschema.shapes AS shapes1
+INNER JOIN myownschema.shapes AS shapes2
+		ON shapes1.shapes = shapes2.shapes;
 --------------------------------------------------------------------------------------------------------------------------------------------------
 
 -- Q3:
@@ -121,8 +184,57 @@ SELECT *
 FROM myownschema.texts;
 
 -- Answer:
+SELECT *
+FROM myownschema.emails
+FULL JOIN myownschema.texts ON emails.email_id = texts.email_id;
 
+--Perma joint table
+CREATE TABLE myownschema.joined AS
+SELECT
+	e.email_id,
+    e.user_id,
+    e.signup_date,
+    t.text_id,
+    t.signup_action
+FROM myownschema.emails AS e
+FULL JOIN myownschema.texts AS t ON e.email_id = t.email_id;
 
+SELECT *
+FROM myownschema.joined;
+
+SELECT signup_action, COUNT(*) AS ocurrence
+FROM myownschema.joined
+GROUP BY signup_action
+ORDER BY ocurrence DESC;
+
+--including null value
+SELECT 
+    (COUNT(CASE WHEN signup_action = 'Confirmed' THEN 1 END) * 100.0 / COUNT(*)) AS activation_rate
+FROM 
+    myownschema.joined; 
+--50%
+
+--excluding null value
+SELECT 
+    (COUNT(CASE WHEN signup_action = 'Confirmed' THEN 1 END) * 100.0 / 
+    NULLIF(COUNT(CASE WHEN signup_action IS NOT NULL THEN 1 END), 0)) AS activation_rate
+	--NULLIF(x,0) prevents division by 0 by returning null value if there are 0 rows
+FROM 
+    myownschema.joined;
+--66.67%
+
+--Model Ans 
+SELECT 
+    ROUND(
+        (COUNT(DISTINCT CASE WHEN t.signup_action = 'Confirmed' THEN e.email_id END) * 100.0) /
+        NULLIF(COUNT(DISTINCT e.email_id), 0), 
+        2
+    ) AS activation_rate
+FROM 
+    myownschema.emails e
+FULL JOIN 
+    myownschema.texts t ON e.email_id = t.email_id;
+--66.67%
 --------------------------------------------------------------------------------------------------------------------------------------------------
 
 -- Q4:
@@ -135,7 +247,7 @@ FROM myownschema.texts;
 -- then it should remain as Order ID 7 in the corrected data.
 
 -- In the results, return the correct pairs of order IDs and items.
-
+DROP TABLE myownschema.zomato_orders;
 CREATE TABLE myownschema.zomato_orders (
     order_id INT,
     item VARCHAR(100)
@@ -156,6 +268,21 @@ SELECT *
 FROM myownschema.zomato_orders;
 
 -- Answer:
+UPDATE myownschema.zomato_orders AS current
+SET item = (
+    SELECT item
+    FROM myownschema.zomato_orders AS next
+    WHERE next.order_id = current.order_id + 1
+)
+WHERE current.order_id < (SELECT MAX(order_id) FROM myownschema.zomato_orders)
+OR (
+    current.order_id = (SELECT MAX(order_id) FROM myownschema.zomato_orders) 
+    AND (SELECT MAX(order_id) FROM myownschema.zomato_orders) % 2 = 0
+);
+
+SELECT *
+FROM myownschema.zomato_orders;
+
 
 --------------------------------------------------------------------------------------------------------------------------------------------------
 
@@ -164,7 +291,7 @@ FROM myownschema.zomato_orders;
 -- spend of each product, grouping the results by product ID.
 
 -- The output should include the year in ascending order, product ID, current year's spend, previous year's spend and year-on-year growth percentage, rounded to 2 decimal places.
-
+DROP TABLE myownschema.user_transactions;
 CREATE TABLE myownschema.user_transactions (
     transaction_id INT,
     product_id INT,
@@ -185,6 +312,20 @@ SELECT *
 FROM myownschema.user_transactions;
 
 -- Answer:
+-- flat value
+SELECT 
+    *, 
+    spend - LAG(spend, 1) OVER (ORDER BY transaction_date) AS Growth_Rate
+FROM 
+    myownschema.user_transactions;
+
+--as a percentage
+SELECT 
+    *, 
+    ((spend - LAG(spend, 1) OVER (ORDER BY transaction_date)) / LAG(spend, 1) OVER (ORDER BY transaction_date)) * 100 AS Growth_Rate_P
+FROM 
+    myownschema.user_transactions;
+
 
 
 --------------------------------------------------------------------------------------------------------------------------------------------------
@@ -258,8 +399,98 @@ SELECT *
 FROM myownschema.actor;
 
 -- Answers:
+CREATE TABLE myownschema.ar_netflix AS
+SELECT
+	a.actor_id, 
+	a.rental_id,
+	r.rating, 
+	r.customer_id, 
+	r.movie_id, 
+	r.customer_age, 
+	r.customer_name, 
+	r.customer_address
+FROM myownschema.actsin AS a
+FULL JOIN myownschema.renting AS r ON a.rental_id = r.rental_id;
 
+SELECT *
+FROM myownschema.ar_netflix;
 
+CREATE TABLE myownschema.j_netflix AS
+SELECT
+	a.actor_id, a.rental_id,
+	a.rating, a.customer_id, 
+	a.movie_id, a.customer_age, 
+	a.customer_name, a.customer_address,
+	ac.actor_name, ac.gender, ac.country, ac.movie_name
+	
+FROM myownschema.ar_netflix AS a
+FULL JOIN myownschema.actor AS ac ON a.actor_id = ac.actor_id;
+
+SELECT *
+FROM myownschema.j_netflix;
+
+SELECT *
+FROM myownschema.j_netflix AS j
+GROUP BY j.customer_id, 
+    j.actor_id, 
+    j.rental_id, 
+    j.rating, 
+    j.movie_id, 
+    j.customer_age, 
+    j.customer_name, 
+    j.customer_address, 
+    j.actor_name, 
+    j.gender, 
+    j.country, 
+    j.movie_name
+ORDER BY j.customer_id,j.rating;
+
+--MODEL ANS
+-- Join the three tables (actsin, renting, and actor)
+SELECT 
+    r.customer_id,
+    r.customer_name,
+    ac.actor_name,
+    r.rating,
+    ac.movie_name,
+    ROW_NUMBER() OVER (PARTITION BY r.customer_id ORDER BY r.rating DESC) AS actor_ranking
+FROM 
+    myownschema.actsin AS a
+JOIN 
+    myownschema.renting AS r ON a.rental_id = r.rental_id
+JOIN 
+    myownschema.actor AS ac ON a.actor_id = ac.actor_id;
+
+-- Select the top 3 actors for each customer based on the ranking
+WITH ranked_actors AS (
+    SELECT 
+        r.customer_id,
+        r.customer_name,
+        ac.actor_name,
+        r.rating,
+        ac.movie_name,
+        ROW_NUMBER() OVER (PARTITION BY r.customer_id ORDER BY r.rating DESC) AS actor_ranking
+    FROM 
+        myownschema.actsin AS a
+    JOIN 
+        myownschema.renting AS r ON a.rental_id = r.rental_id
+    JOIN 
+        myownschema.actor AS ac ON a.actor_id = ac.actor_id
+)
+-- Filter the top 3 actors per customer
+SELECT 
+    customer_id,
+    customer_name,
+    actor_name,
+    rating,
+    movie_name,
+    actor_ranking
+FROM 
+    ranked_actors
+WHERE 
+    actor_ranking <= 3
+ORDER BY 
+    customer_id, actor_ranking;
 --------------------------------------------------------------------------------------------------------------------------------------------------
 
 -- Q7: Imagine you are a data analyst at Foodpanda, responsible for improving customer experience. 
@@ -343,4 +574,43 @@ SELECT *
 FROM myownschema.orders;
 
 -- Answer:
+SELECT 
+        o.customer_id,
+        o.customer_name,
+        o.store_id,
+        o.store_name,
+        COUNT(o.order_id) AS total_orders,
+        ROW_NUMBER() OVER (PARTITION BY o.customer_id ORDER BY COUNT(o.order_id) DESC) AS store_rank
+    FROM 
+        myownschema.orders AS o
+    GROUP BY 
+        o.customer_id, o.customer_name, o.store_id, o.store_name
+
+-- if each customer orders from more than 3 different stores
+WITH store_order_count AS (
+    SELECT 
+        o.customer_id,
+        o.customer_name,
+        o.store_id,
+        o.store_name,
+        COUNT(o.order_id) AS total_orders,
+        ROW_NUMBER() OVER (PARTITION BY o.customer_id ORDER BY COUNT(o.order_id) DESC) AS store_rank
+    FROM 
+        myownschema.orders AS o
+    GROUP BY 
+        o.customer_id, o.customer_name, o.store_id, o.store_name
+)
+SELECT 
+    customer_id,
+    customer_name,
+    store_id,
+    store_name,
+    total_orders,
+    store_rank
+FROM 
+    store_order_count
+WHERE 
+    store_rank <= 3 
+ORDER BY 
+    customer_id, store_rank;
 	
